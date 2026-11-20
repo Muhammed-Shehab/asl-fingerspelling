@@ -67,6 +67,8 @@ class ASLProcessor(VideoProcessorBase):
         self.none_since = None
         self.shown = None
         self.progress = 0.0
+        self.fps = 0.0
+        self.prev_t = time.time()
 
     def _apply(self, label):
         if label == "space":
@@ -90,6 +92,7 @@ class ASLProcessor(VideoProcessorBase):
             return self.text, self.shown, self.progress
 
     def recv(self, frame):
+        t0 = time.time()
         img = cv2.flip(frame.to_ndarray(format="bgr24"), 1)
         rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         res = self.hands.process(rgb)
@@ -109,6 +112,10 @@ class ASLProcessor(VideoProcessorBase):
                     pred = self.classes[i]
 
         now = time.time()
+        dt = now - self.prev_t
+        self.prev_t = now
+        if dt > 0:
+            self.fps = 0.9 * self.fps + 0.1 * (1.0 / dt)
         with self.lock:
             self.history.append(pred)
             stable = None
@@ -152,6 +159,9 @@ class ASLProcessor(VideoProcessorBase):
                       (0, 255, 0), -1)
         cv2.putText(img, text[-26:] + "_", (10, h - 15), cv2.FONT_HERSHEY_SIMPLEX,
                     0.9, (255, 255, 255), 2)
+        ms = (time.time() - t0) * 1000
+        cv2.putText(img, f"{self.fps:.0f} FPS  {ms:.0f} ms", (w - 190, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
